@@ -34,16 +34,16 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
     // --- INITIALIZATION ----------------------------------------------------------
 
     constructor(
-        address addressProviderAAVE_,
         address dai_,
         address sdai_,
-        address gohm_
+        address gohm_,
+        address addressProviderAAVE_
     ) {
         // Initialize FlashLoan Simple Receiver constants
         ADDRESSES_PROVIDER = IPoolAddressesProvider(addressProviderAAVE_);
         POOL = IPool(IPoolAddressesProvider(addressProviderAAVE_).getPool());
 
-        // Initialize Cooler Loan constants and variables
+        // Initialize Cooler Loans variables
         dai = IERC20(dai_);
         sdai = IERC4626(dai_);
         gohm = IERC20(gohm_);
