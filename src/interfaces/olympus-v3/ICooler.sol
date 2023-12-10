@@ -33,6 +33,11 @@ interface ICooler {
         bool callback;          // If this is true, the lender must inherit CoolerCallback.
     }
 
+    function loans(uint256 id_) external view returns (Request memory, uint256, uint256, uint256, uint256, address, address, bool);
+
+    /// @notice This address owns the collateral in escrow.
+    function owner() external pure returns (address _owner);
+
     /// @notice Request a loan with given parameters.
     ///         Collateral is taken at time of request.
     /// @param  amount_ of debt tokens to borrow.
