@@ -34,7 +34,6 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
     // --- INITIALIZATION ----------------------------------------------------------
 
     constructor(
-        address owner_,
         address addressProviderAAVE_,
         address dai_,
         address sdai_,
