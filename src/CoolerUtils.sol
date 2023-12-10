@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+// SPDX-License-Identifier: GLP-3.0
+pragma solidity ^0.8.15;
 
-contract Counter {
+contract CoolerUtils {
     uint256 public number;
 
     function setNumber(uint256 newNumber) public {
