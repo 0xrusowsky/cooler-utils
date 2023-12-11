@@ -15,11 +15,12 @@ import {CoolerUtils} from "src/CoolerUtils.sol";
 contract CoolerUtilsTest is Test {
     CoolerUtils public utils;
 
-    ICoolerFactory public coolerFactory;
-    IClearinghouse public clearinghouse;
     IERC20 public gohm;
     IERC20 public dai;
     IERC4626 public sdai;
+
+    ICoolerFactory public coolerFactory;
+    IClearinghouse public clearinghouse;
     address public aave;
 
     address public walletA;
@@ -32,7 +33,7 @@ contract CoolerUtilsTest is Test {
 
     function setUp() public {
         // Mainnet Fork at current block.
-        vm.createSelectFork(vm.rpcUrl("MAINNET"));
+        vm.createSelectFork(vm.rpcUrl("MAINNET"), 18762666);
 
         // Required Contracts
         coolerFactory = ICoolerFactory(0x30Ce56e80aA96EbbA1E1a74bC5c0FEB5B0dB4216);
@@ -44,10 +45,10 @@ contract CoolerUtilsTest is Test {
 
         // Deploy CoolerUtils
         utils = new CoolerUtils(
-            aave,
             address(dai),
             address(sdai),
-            address(gohm)
+            address(gohm),
+            aave
         );
 
         walletA = vm.addr(0xA);
@@ -106,5 +107,70 @@ contract CoolerUtilsTest is Test {
         (loan, ) = clearinghouse.getLoanForCollateral(500 * 1e18);
         clearinghouse.lendToCooler(coolerC, loan);
         vm.stopPrank();
+    }
+
+    function test_consolidateLoansFromSingleCooler_withDAI() public {
+        uint256[] memory idsA = _idsA();
+        uint256 initPrincipal = dai.balanceOf(walletA);
+
+        // Check that coolerA has 3 open loans
+        ICooler.Loan memory loan = coolerA.getLoan(0);
+        assertEq(loan.collateral, 2_000 * 1e18);
+        loan = coolerA.getLoan(1);
+        assertEq(loan.collateral, 1_000 * 1e18);
+        loan = coolerA.getLoan(2);
+        assertEq(loan.collateral, 333 * 1e18);
+        vm.expectRevert();
+        loan = coolerA.getLoan(3);
+
+        // Grant necessary approvals and ensure that walletA has enough DAI to consolidate
+        (address owner, uint256 gohmApproval, uint256 daiApproval, ) = utils.requiredApprovals(address(coolerA), idsA);
+        deal(address(dai), walletA, daiApproval);
+        assertEq(owner, walletA);
+
+        vm.startPrank(walletA);
+
+        // Grant necessary approvals
+        dai.approve(address(utils), daiApproval);
+        gohm.approve(address(utils), gohmApproval);
+
+        // Consolidate loans for coolerA
+        utils.consolidateLoansFromSingleCooler(address(coolerA), address(clearinghouse), idsA, false);
+
+        // Check that coolerA has a single open loan
+        loan = coolerA.getLoan(0);
+        assertEq(loan.collateral, 0);
+        loan = coolerA.getLoan(1);
+        assertEq(loan.collateral, 0);
+        loan = coolerA.getLoan(2);
+        assertEq(loan.collateral, 0);
+        loan = coolerA.getLoan(3);
+        assertEq(loan.collateral, 3_333 * 1e18);
+        // Check token balances
+        assertEq(dai.balanceOf(walletA), initPrincipal);
+        assertEq(gohm.balanceOf(address(coolerA)), 3_333 * 1e18);
+    }
+
+    // --- AUX FUNCTIONS -----------------------------------------------------------
+
+    function _idsA() internal pure returns (uint256[] memory) {
+        uint256[] memory ids = new uint256[](3);
+        ids[0] = 0;
+        ids[1] = 1;
+        ids[2] = 2;
+        return ids;
+    }
+
+    function _idsB() internal pure returns (uint256[] memory) {
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+        return ids;
+    }
+
+    function _idsC() internal pure returns (uint256[] memory) {
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+        return ids;
     }
 }

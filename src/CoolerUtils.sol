@@ -45,7 +45,7 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
 
         // Initialize Cooler Loans variables
         dai = IERC20(dai_);
-        sdai = IERC4626(dai_);
+        sdai = IERC4626(sdai_);
         gohm = IERC20(gohm_);
     }
 
@@ -82,7 +82,12 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
         }
 
         // Repay all loans
+        dai.approve(cooler_, totalDebt);
         _repayDebtForLoans(cooler_, numLoans, ids_);
+
+        // Take a new loan with all the received collateral.
+        gohm.approve(clearinghouse_, gohm.balanceOf(address(this)));
+        return IClearinghouse(clearinghouse_).lendToCooler(ICooler(cooler_), totalPrincipal);
     }
 
     /// @notice Consolidate loans taken with multiple Cooler contracts into a single loan for a target Cooler.
@@ -121,6 +126,7 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
             }
 
             // Repay all loans
+            dai.approve(clearinghouse_, batchDebt);
             _repayDebtForLoans(batch_[i].cooler, numLoans, batch_[i].ids);
         }
 
@@ -244,14 +250,15 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
         uint256[] memory ids_
     ) internal returns (uint256, uint256) {
         uint256 totalCollateral;
+        ICooler cooler = ICooler(cooler_);
 
         for (uint256 i; i < numLoans_; i++) {
-            (, uint256 principal, uint256 interestDue, uint256 collateral, , , , ) = ICooler(cooler_).loans(ids_[i]);
-            ICooler(cooler_).repayLoan(ids_[i], principal + interestDue);
+            (, uint256 principal, uint256 interestDue, uint256 collateral, , , , ) = cooler.loans(ids_[i]);
+            cooler.repayLoan(ids_[i], principal + interestDue);
             totalCollateral += collateral;
         }
-        
-        gohm.transferFrom(cooler_, address(this), totalCollateral);
+
+        gohm.transferFrom(cooler.owner(), address(this), totalCollateral);
     }
 
     // --- AUX FUNCTIONS -----------------------------------------------------------
