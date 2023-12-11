@@ -120,6 +120,47 @@ contract CoolerUtilsTest is Test {
         vm.stopPrank();
     }
 
+    // --- approve -----------------------------------------------------------------
+
+    function test_approval() public {
+        // Check initial state
+        assertFalse(utils.isApprovedFor(address(coolerA), walletZ));
+
+        vm.prank(walletA);
+        utils.approve(address(coolerA), walletZ);
+
+        // Check that storage has been updated
+        assertTrue(utils.isApprovedFor(address(coolerA), walletZ));
+    }
+
+    function testRevert_approval_notCoolerOwner() public {
+        vm.prank(walletZ);
+        vm.expectRevert(CoolerUtils.NotCoolerOwner.selector);
+        utils.approve(address(coolerA), walletZ);
+    }
+
+    // --- revoke ------------------------------------------------------------------
+
+    function test_revoke() public {
+        vm.prank(walletA);
+        utils.approve(address(coolerA), walletZ);
+
+        // Check initial state
+        assertTrue(utils.isApprovedFor(address(coolerA), walletZ));
+
+        vm.prank(walletA);
+        utils.revoke(address(coolerA), walletZ);
+
+        // Check that storage has been updated
+        assertFalse(utils.isApprovedFor(address(coolerA), walletZ));
+    }
+
+    function testRevert_approval_notCoolerOwner() public {
+        vm.prank(walletB);
+        vm.expectRevert(CoolerUtils.NotCoolerOwner.selector);
+        utils.approve(address(coolerA), walletZ);
+    }
+
     // --- consolidateLoansFromSingleCooler ----------------------------------------
 
     function test_consolidateLoansFromSingleCooler_DAI() public {
