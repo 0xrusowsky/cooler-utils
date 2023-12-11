@@ -122,7 +122,7 @@ contract CoolerUtilsTest is Test {
 
     // --- approve -----------------------------------------------------------------
 
-    function test_approval() public {
+    function test_approve() public {
         // Check initial state
         assertFalse(utils.isApprovedFor(address(coolerA), walletZ));
 
@@ -133,7 +133,7 @@ contract CoolerUtilsTest is Test {
         assertTrue(utils.isApprovedFor(address(coolerA), walletZ));
     }
 
-    function testRevert_approval_notCoolerOwner() public {
+    function testRevert_approve_notCoolerOwner() public {
         vm.prank(walletZ);
         vm.expectRevert(CoolerUtils.NotCoolerOwner.selector);
         utils.approve(address(coolerA), walletZ);
@@ -155,7 +155,7 @@ contract CoolerUtilsTest is Test {
         assertFalse(utils.isApprovedFor(address(coolerA), walletZ));
     }
 
-    function testRevert_approval_notCoolerOwner() public {
+    function testRevert_revoke_notCoolerOwner() public {
         vm.prank(walletB);
         vm.expectRevert(CoolerUtils.NotCoolerOwner.selector);
         utils.approve(address(coolerA), walletZ);
@@ -576,7 +576,7 @@ contract CoolerUtilsTest is Test {
         batches[2] = CoolerUtils.Batch(true, address(coolerC), idsC);
 
         // Consolidate loans from coolers A, B, and C into CoolerC
-        vm.prank(coolerC);
+        vm.prank(walletC);
         utils.consolidateLoansFromMultipleCoolers(address(coolerC), address(clearinghouse), batches);
 
         // Check that coolerA doesn't have open loans

@@ -11,7 +11,7 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
 
     // --- ERRORS ------------------------------------------------------------------
 
-    error OnlyCoolerOwner();
+    error NotCoolerOwner();
     error MissingApproval(address cooler_);
 
     // --- DATA STRUCTURES ---------------------------------------------------------
@@ -62,12 +62,12 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
     // --- ACCESS CONTROL ----------------------------------------------------------
 
     function approve(address cooler_, address spender_) external {
-        if (msg.sender != ICooler(cooler_).owner()) revert OnlyCoolerOwner();
+        if (msg.sender != ICooler(cooler_).owner()) revert NotCoolerOwner();
         isApprovedFor[cooler_][spender_] = true;
     }
 
     function revoke(address cooler_, address spender_) external {
-        if (msg.sender != ICooler(cooler_).owner()) revert OnlyCoolerOwner();
+        if (msg.sender != ICooler(cooler_).owner()) revert NotCoolerOwner();
         delete isApprovedFor[cooler_][spender_];
     }
 
