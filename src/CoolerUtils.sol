@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GLP-3.0
 pragma solidity ^0.8.15;
 
+import {Test, console2} from "forge-std/Test.sol";
+
 import { IFlashLoanSimpleReceiver, IPoolAddressesProvider, IPool } from "src/interfaces/aave-v3/IFlashLoanSimpleReceiver.sol";
 import { IClearinghouse } from "src/interfaces/olympus-v3/IClearinghouse.sol";
 import { ICooler } from "src/interfaces/olympus-v3/ICooler.sol";
@@ -8,6 +10,10 @@ import { IERC20 } from "forge-std/interfaces/IERC20.sol";
 import { IERC4626 } from "forge-std/interfaces/IERC4626.sol";
 
 contract CoolerUtils is IFlashLoanSimpleReceiver {
+
+    // --- ERRORS ------------------------------------------------------------------
+
+    error InvalidTargetCooler();
 
     // --- DATA STRUCTURES ---------------------------------------------------------
 
@@ -93,6 +99,8 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
     /// @notice Consolidate loans taken with multiple Cooler contracts into a single loan for a target Cooler.
     ///         This function is meant to be used when the user has taken loans with several wallets.
     ///
+    /// @dev    This function will revert if:
+    ///            - The target Cooler where loans will be consolidated is not included in the batches.
     /// @dev    This function will revert unless the owner of each Cooler has:
     ///            - Approved this contract to spend the total debt owed to each Cooler.
     ///            - Approved this contract to spend the gOHM escrowed by each Cooler.
@@ -104,15 +112,19 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
     function consolidateLoansFromMultipleCoolers(
         address target_,
         address clearinghouse_,
-        Batch[] calldata batch_,
-        bool sdai_
+        Batch[] calldata batch_
     ) public returns (uint256) {
+        bool targetCheck;
         uint256 totalPrincipal;
         uint256 numBatches = batch_.length;
 
         // Iterate over all batches
         for (uint256 i; i < numBatches; i++) {
             uint256 numLoans = batch_[i].ids.length;
+            ICooler cooler = ICooler(batch_[i].cooler);
+
+            // Ensure target cooler is included in one of the batches
+            if (address(cooler) == target_) targetCheck = true;
 
             // Cache batch debt and principal
             (uint256 batchDebt, uint256 batchPrincipal) = _getDebtForLoans(batch_[i].cooler, numLoans, batch_[i].ids);
@@ -120,15 +132,17 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
 
             // Transfer in necessary DAI to repay the loans
             if (batch_[i].sdai) {
-                sdai.withdraw(batchDebt, address(this), address(msg.sender));
+                sdai.withdraw(batchDebt, address(this), cooler.owner());
             } else {
-                dai.transferFrom(address(msg.sender), address(this), batchDebt);
+                dai.transferFrom(cooler.owner(), address(this), batchDebt);
             }
 
             // Repay all loans
-            dai.approve(clearinghouse_, batchDebt);
-            _repayDebtForLoans(batch_[i].cooler, numLoans, batch_[i].ids);
+            dai.approve(address(cooler), batchDebt);
+            _repayDebtForLoans(address(cooler), numLoans, batch_[i].ids);
         }
+
+        if (!targetCheck) revert InvalidTargetCooler();
 
         // Take a new loan with all the received collateral.
         gohm.approve(clearinghouse_, gohm.balanceOf(address(this)));
@@ -142,6 +156,8 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
     ///         This function is meant to be used when the user doesn't have access to enough funds
     ///         to repay each individual loan.
     ///
+    /// @dev    This function will revert if:
+    ///            - The target Cooler where loans will be consolidated is not included in the batches.
     /// @dev    This function will revert unless the message sender has:
     ///            - Approved this contract to spend the `availableFunds_`.
     ///            - Approved this contract to spend the gOHM escrowed by the target Cooler.
@@ -157,6 +173,7 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
         uint256 availableFunds_,
         bool sdai_
     ) public returns (uint256) {
+        bool targetCheck;
         uint256 totalDebt;
         uint256 totalPrincipal;
         uint256 numBatches = batch_.length;
@@ -165,11 +182,16 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
         for (uint256 i; i < numBatches; i++) {
             uint256 numLoans = batch_[i].ids.length;
 
+            // Ensure target cooler is included in one of the batches
+            if (batch_[i].cooler == target_) targetCheck = true;
+
             // Cache batch debt and principal
             (uint256 batchDebt, uint256 batchPrincipal) = _getDebtForLoans(batch_[i].cooler, numLoans, batch_[i].ids);
             totalPrincipal += batchPrincipal;
             totalDebt += batchDebt;
         }
+
+        if (!targetCheck) revert InvalidTargetCooler();
 
         // Transfer in necessary DAI to repay the loans
         if (sdai_) {
