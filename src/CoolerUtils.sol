@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GLP-3.0
 pragma solidity ^0.8.15;
 
-import {Test, console2} from "forge-std/Test.sol";
-
 import { IFlashLoanSimpleReceiver, IPoolAddressesProvider, IPool } from "src/interfaces/aave-v3/IFlashLoanSimpleReceiver.sol";
 import { IClearinghouse } from "src/interfaces/olympus-v3/IClearinghouse.sol";
 import { ICooler } from "src/interfaces/olympus-v3/ICooler.sol";
@@ -13,7 +11,8 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
 
     // --- ERRORS ------------------------------------------------------------------
 
-    error InvalidTargetCooler();
+    error OnlyCoolerOwner();
+    error MissingApproval(address cooler_);
 
     // --- DATA STRUCTURES ---------------------------------------------------------
 
@@ -37,6 +36,11 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
     IERC4626 public immutable sdai;
     IERC20 public immutable dai;
 
+    // --- STATE VARIABLES ---------------------------------------------------------
+
+    /// @notice Tracks wether a cooler is approved for a given spender.
+    mapping(address => mapping(address => bool)) public isApprovedFor;
+
     // --- INITIALIZATION ----------------------------------------------------------
 
     constructor(
@@ -53,6 +57,18 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
         dai = IERC20(dai_);
         sdai = IERC4626(sdai_);
         gohm = IERC20(gohm_);
+    }
+
+    // --- ACCESS CONTROL ----------------------------------------------------------
+
+    function approve(address cooler_, address spender_) external {
+        if (msg.sender != ICooler(cooler_).owner()) revert OnlyCoolerOwner();
+        isApprovedFor[cooler_][spender_] = true;
+    }
+
+    function revoke(address cooler_, address spender_) external {
+        if (msg.sender != ICooler(cooler_).owner()) revert OnlyCoolerOwner();
+        delete isApprovedFor[cooler_][spender_];
     }
 
     // --- OPERATION ---------------------------------------------------------------
@@ -114,7 +130,6 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
         address clearinghouse_,
         Batch[] calldata batch_
     ) public returns (uint256) {
-        bool targetCheck;
         uint256 totalPrincipal;
         uint256 numBatches = batch_.length;
 
@@ -122,9 +137,11 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
         for (uint256 i; i < numBatches; i++) {
             uint256 numLoans = batch_[i].ids.length;
             ICooler cooler = ICooler(batch_[i].cooler);
-
-            // Ensure target cooler is included in one of the batches
-            if (address(cooler) == target_) targetCheck = true;
+            address owner = cooler.owner();
+        
+            // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
+            if (owner != msg.sender && !isApprovedFor[address(cooler)][msg.sender])
+                revert MissingApproval(address(cooler));
 
             // Cache batch debt and principal
             (uint256 batchDebt, uint256 batchPrincipal) = _getDebtForLoans(batch_[i].cooler, numLoans, batch_[i].ids);
@@ -141,8 +158,6 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
             dai.approve(address(cooler), batchDebt);
             _repayDebtForLoans(address(cooler), numLoans, batch_[i].ids);
         }
-
-        if (!targetCheck) revert InvalidTargetCooler();
 
         // Take a new loan with all the received collateral.
         gohm.approve(clearinghouse_, gohm.balanceOf(address(this)));
@@ -173,7 +188,6 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
         uint256 availableFunds_,
         bool sdai_
     ) public returns (uint256) {
-        bool targetCheck;
         uint256 totalDebt;
         uint256 totalPrincipal;
         uint256 numBatches = batch_.length;
@@ -181,28 +195,35 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
         // Iterate over all batches
         for (uint256 i; i < numBatches; i++) {
             uint256 numLoans = batch_[i].ids.length;
+            ICooler cooler = ICooler(batch_[i].cooler);
 
-            // Ensure target cooler is included in one of the batches
-            if (batch_[i].cooler == target_) targetCheck = true;
+            {
+                // Cache batch debt and principal
+                (uint256 batchDebt, uint256 batchPrincipal) = _getDebtForLoans(address(cooler), numLoans, batch_[i].ids);
+                totalPrincipal += batchPrincipal;
+                totalDebt += batchDebt;
 
-            // Cache batch debt and principal
-            (uint256 batchDebt, uint256 batchPrincipal) = _getDebtForLoans(batch_[i].cooler, numLoans, batch_[i].ids);
-            totalPrincipal += batchPrincipal;
-            totalDebt += batchDebt;
-        }
+                // Grant approval to the Cooler to spend the debt
+                dai.approve(address(cooler), batchDebt);
+            }
+            
+            address owner = cooler.owner();
+        
+            // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
+            if (owner != msg.sender && !isApprovedFor[address(cooler)][msg.sender])
+                revert MissingApproval(address(cooler));
 
-        if (!targetCheck) revert InvalidTargetCooler();
-
-        // Transfer in necessary DAI to repay the loans
-        if (sdai_) {
-            sdai.redeem(availableFunds_, address(this), address(msg.sender));
-        } else {
-            dai.transferFrom(address(msg.sender), address(this), totalDebt);
+            // Transfer in necessary DAI to repay the loans
+            if (sdai_) {
+                sdai.redeem(availableFunds_, address(this), owner);
+            } else {
+                dai.transferFrom(owner, address(this), availableFunds_);
+            }
         }
 
         // Calculate the required flashloan amount based on the available funds.
         uint256 daiBalance = dai.balanceOf(address(this));
-        uint256 flashloan = 10000 * (totalDebt - daiBalance) / (10000 - POOL.FLASHLOAN_PREMIUM_TOTAL());
+        uint256 flashloan = 10_000 * (totalDebt - daiBalance) / (10_000 - POOL.FLASHLOAN_PREMIUM_TOTAL());
 
         address receiverAddress = address(this);
         bytes memory params = abi.encode(target_, clearinghouse_, totalPrincipal, batch_);
@@ -241,7 +262,7 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
         IClearinghouse(clearinghouse).lendToCooler(cooler, principal);
 
         // Repay flashloan
-        dai.transferFrom(cooler.owner(), address(this), amount_ + premium_);
+        dai.transferFrom(cooler.owner(), address(this), principal);
         dai.approve(address(POOL), amount_ + premium_);
 
         return true;

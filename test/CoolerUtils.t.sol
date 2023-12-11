@@ -22,6 +22,7 @@ contract CoolerUtilsTest is Test {
     ICoolerFactory public coolerFactory;
     IClearinghouse public clearinghouse;
     address public aave;
+    address public adai;
 
     address public walletA;
     address public walletB;
@@ -44,6 +45,7 @@ contract CoolerUtilsTest is Test {
         dai = IERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
         sdai = IERC4626(0x83F20F44975D03b1b09e64809B757c47f942BEeA);
         aave = 0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e;
+        adai = 0x018008bfb33d285247A21d44E50697654f754e63;
 
         // Deploy CoolerUtils
         utils = new CoolerUtils(
@@ -135,7 +137,7 @@ contract CoolerUtilsTest is Test {
         loan = coolerA.getLoan(3);
 
         // -------------------------------------------------------------------------
-        //           NECESSARY USER SETUP BEFORE CALLING CONSOLIDATION
+        //                 NECESSARY USER SETUP BEFORE CONSOLIDATING
         // -------------------------------------------------------------------------
 
         // Ensure that walletA has enough DAI to consolidate
@@ -186,7 +188,7 @@ contract CoolerUtilsTest is Test {
         loan = coolerA.getLoan(3);
 
         // -------------------------------------------------------------------------
-        //           NECESSARY USER SETUP BEFORE CALLING CONSOLIDATION
+        //                 NECESSARY USER SETUP BEFORE CONSOLIDATING
         // -------------------------------------------------------------------------
 
         // Ensure that walletA has enough sDAI to consolidate (and get rid of DAI to avoid confusion)
@@ -255,7 +257,7 @@ contract CoolerUtilsTest is Test {
         loan = coolerC.getLoan(1);
 
         // -------------------------------------------------------------------------
-        //           NECESSARY USER SETUP BEFORE CALLING CONSOLIDATION
+        //                 NECESSARY USER SETUP BEFORE CONSOLIDATING
         // -------------------------------------------------------------------------
 
         // Ensure that walletA has enough DAI to consolidate and grant necessary approvals
@@ -276,6 +278,7 @@ contract CoolerUtilsTest is Test {
         vm.startPrank(walletB);
         dai.approve(address(utils), daiApproval);
         gohm.approve(address(utils), gohmApproval);
+        utils.approve(address(coolerB), walletA);
         vm.stopPrank();
 
         // Ensure that walletC has enough DAI to consolidate and grant necessary approvals
@@ -286,6 +289,7 @@ contract CoolerUtilsTest is Test {
         vm.startPrank(walletC);
         dai.approve(address(utils), daiApproval);
         gohm.approve(address(utils), gohmApproval);
+        utils.approve(address(coolerC), walletA);
         vm.stopPrank();
 
         // -------------------------------------------------------------------------
@@ -295,7 +299,8 @@ contract CoolerUtilsTest is Test {
         batches[1] = CoolerUtils.Batch(false, address(coolerB), idsB);
         batches[2] = CoolerUtils.Batch(false, address(coolerC), idsC);
 
-        // Consolidate loans for coolerA
+        // Consolidate loans from coolers A, B, and C into CoolerC
+        vm.prank(walletA);
         utils.consolidateLoansFromMultipleCoolers(address(coolerC), address(clearinghouse), batches);
 
         // Check that coolerA doesn't have open loans
@@ -365,7 +370,7 @@ contract CoolerUtilsTest is Test {
         loan = coolerC.getLoan(1);
 
         // -------------------------------------------------------------------------
-        //           NECESSARY USER SETUP BEFORE CALLING CONSOLIDATION
+        //                 NECESSARY USER SETUP BEFORE CONSOLIDATING
         // -------------------------------------------------------------------------
 
         // Ensure that walletA has enough DAI to consolidate and grant necessary approvals
@@ -377,6 +382,7 @@ contract CoolerUtilsTest is Test {
         vm.startPrank(walletA);
         sdai.approve(address(utils), sdaiApproval);
         gohm.approve(address(utils), gohmApproval);
+        utils.approve(address(coolerA), walletZ);
         vm.stopPrank();
 
         // Ensure that walletB has enough DAI to consolidate and grant necessary approvals
@@ -388,6 +394,7 @@ contract CoolerUtilsTest is Test {
         vm.startPrank(walletB);
         sdai.approve(address(utils), sdaiApproval);
         gohm.approve(address(utils), gohmApproval);
+        utils.approve(address(coolerB), walletZ);
         vm.stopPrank();
 
         // Ensure that walletC has enough DAI to consolidate and grant necessary approvals
@@ -399,6 +406,7 @@ contract CoolerUtilsTest is Test {
         vm.startPrank(walletC);
         sdai.approve(address(utils), sdaiApproval);
         gohm.approve(address(utils), gohmApproval);
+        utils.approve(address(coolerC), walletZ);
         vm.stopPrank();
 
         // -------------------------------------------------------------------------
@@ -408,7 +416,8 @@ contract CoolerUtilsTest is Test {
         batches[1] = CoolerUtils.Batch(true, address(coolerB), idsB);
         batches[2] = CoolerUtils.Batch(true, address(coolerC), idsC);
 
-        // Consolidate loans for coolerA
+        // Consolidate loans for coolers A, B, and C into CoolerC
+        vm.prank(walletZ);
         utils.consolidateLoansFromMultipleCoolers(address(coolerC), address(clearinghouse), batches);
 
         // Check that coolerA doesn't have open loans
@@ -481,7 +490,7 @@ contract CoolerUtilsTest is Test {
         loan = coolerC.getLoan(1);
 
         // -------------------------------------------------------------------------
-        //           NECESSARY USER SETUP BEFORE CALLING CONSOLIDATION
+        //                 NECESSARY USER SETUP BEFORE CONSOLIDATING
         // -------------------------------------------------------------------------
 
         // Ensure that walletA has enough DAI to consolidate and grant necessary approvals
@@ -492,6 +501,7 @@ contract CoolerUtilsTest is Test {
         vm.startPrank(walletA);
         dai.approve(address(utils), daiApproval);
         gohm.approve(address(utils), gohmApproval);
+        utils.approve(address(coolerA), walletC);
         vm.stopPrank();
 
         // Ensure that walletB has enough DAI to consolidate and grant necessary approvals
@@ -503,6 +513,7 @@ contract CoolerUtilsTest is Test {
         vm.startPrank(walletB);
         sdai.approve(address(utils), sdaiApproval);
         gohm.approve(address(utils), gohmApproval);
+        utils.approve(address(coolerB), walletC);
         vm.stopPrank();
 
         // Ensure that walletC has enough DAI to consolidate and grant necessary approvals
@@ -523,7 +534,8 @@ contract CoolerUtilsTest is Test {
         batches[1] = CoolerUtils.Batch(true, address(coolerB), idsB);
         batches[2] = CoolerUtils.Batch(true, address(coolerC), idsC);
 
-        // Consolidate loans for coolerA
+        // Consolidate loans from coolers A, B, and C into CoolerC
+        vm.prank(coolerC);
         utils.consolidateLoansFromMultipleCoolers(address(coolerC), address(clearinghouse), batches);
 
         // Check that coolerA doesn't have open loans
@@ -566,7 +578,7 @@ contract CoolerUtilsTest is Test {
         assertEq(gohm.allowance(address(walletC), address(utils)), 0);
     }
 
-    function testRevert_consolidateLoansFromMultipleCoolers_invalidTarget() public {
+    function testRevert_consolidateLoansFromMultipleCoolers_missingApproval() public {
         uint256[] memory idsA = _idsA();
         uint256[] memory idsB = _idsB();
         uint256[] memory idsC = _idsC();
@@ -595,7 +607,7 @@ contract CoolerUtilsTest is Test {
         loan = coolerC.getLoan(1);
 
         // -------------------------------------------------------------------------
-        //           NECESSARY USER SETUP BEFORE CALLING CONSOLIDATION
+        //                 NECESSARY USER SETUP BEFORE CONSOLIDATING
         // -------------------------------------------------------------------------
 
         // Ensure that walletA has enough DAI to consolidate and grant necessary approvals
@@ -606,6 +618,7 @@ contract CoolerUtilsTest is Test {
         vm.startPrank(walletA);
         dai.approve(address(utils), daiApproval);
         gohm.approve(address(utils), gohmApproval);
+        // utils.approve(address(coolerA), walletZ);
         vm.stopPrank();
 
         // Ensure that walletB has enough DAI to consolidate and grant necessary approvals
@@ -616,6 +629,7 @@ contract CoolerUtilsTest is Test {
         vm.startPrank(walletB);
         dai.approve(address(utils), daiApproval);
         gohm.approve(address(utils), gohmApproval);
+        // utils.approve(address(coolerB), walletZ);
         vm.stopPrank();
 
         // Ensure that walletC has enough DAI to consolidate and grant necessary approvals
@@ -626,6 +640,7 @@ contract CoolerUtilsTest is Test {
         vm.startPrank(walletC);
         dai.approve(address(utils), daiApproval);
         gohm.approve(address(utils), gohmApproval);
+        // utils.approve(address(coolerC), walletZ);
         vm.stopPrank();
 
         // -------------------------------------------------------------------------
@@ -635,9 +650,133 @@ contract CoolerUtilsTest is Test {
         batches[1] = CoolerUtils.Batch(false, address(coolerB), idsB);
         batches[2] = CoolerUtils.Batch(false, address(coolerC), idsC);
 
-        // Attempt to consolidate loans into an invalid target
-        vm.expectRevert(CoolerUtils.InvalidTargetCooler.selector);
+        // Attempt to consolidate loans with a wallet that is not approved
+        vm.expectRevert(CoolerUtils.MissingApproval.selector);
         utils.consolidateLoansFromMultipleCoolers(address(coolerZ), address(clearinghouse), batches);
+    }
+
+    // --- consolidateLoansWithoutFunds --------------------------------------------
+
+    function test_consolidateLoansWithoutFunds_DAI_funding() public {
+        uint256[] memory idsA = _idsA();
+        uint256[] memory idsB = _idsB();
+        uint256[] memory idsC = _idsC();
+        uint256 initPrincipal = dai.balanceOf(walletA) + dai.balanceOf(walletB) + dai.balanceOf(walletC);
+
+        // Check that coolerA has 3 open loans
+        ICooler.Loan memory loan = coolerA.getLoan(0);
+        assertEq(loan.collateral, 2_000 * 1e18);
+        loan = coolerA.getLoan(1);
+        assertEq(loan.collateral, 1_000 * 1e18);
+        loan = coolerA.getLoan(2);
+        assertEq(loan.collateral, 333 * 1e18);
+        vm.expectRevert();
+        loan = coolerA.getLoan(3);
+        // Check that coolerB has 2 open loans
+        loan = coolerB.getLoan(0);
+        assertEq(loan.collateral, 600 * 1e18);
+        loan = coolerB.getLoan(1);
+        assertEq(loan.collateral, 400 * 1e18);
+        vm.expectRevert();
+        loan = coolerB.getLoan(2);
+        // Check that coolerC has 1 open loan
+        loan = coolerC.getLoan(0);
+        assertEq(loan.collateral, 500 * 1e18);
+        vm.expectRevert();
+        loan = coolerC.getLoan(1);
+
+        // -------------------------------------------------------------------------
+        //                 NECESSARY USER SETUP BEFORE CONSOLIDATING
+        // -------------------------------------------------------------------------
+
+        uint256 totalApproval;
+        // Ensure that walletA grants gOHM approval
+        (address owner, uint256 gohmApproval, uint256 daiApproval, ) = utils.requiredApprovals(address(coolerA), idsA);
+        totalApproval += daiApproval;
+        assertEq(owner, walletA);
+
+        vm.prank(walletA);
+        gohm.approve(address(utils), gohmApproval);
+
+        // Ensure that walletB grants gOHM approval
+        (owner, gohmApproval, daiApproval, ) = utils.requiredApprovals(address(coolerB), idsB);
+        totalApproval += daiApproval;
+        assertEq(owner, walletB);
+
+        vm.prank(walletB);
+        gohm.approve(address(utils), gohmApproval);
+
+        // Ensure that walletC grants gOHM approval
+        (owner, gohmApproval, daiApproval, ) = utils.requiredApprovals(address(coolerC), idsC);
+        totalApproval += daiApproval;
+        assertEq(owner, walletC);
+
+        vm.prank(walletC);
+        gohm.approve(address(utils), gohmApproval);
+
+        // Ensure that owner of the target wallet has enough DAI to consolidate and grant necessary approval
+        IPool POOL = IPool(IPoolAddressesProvider(aave).getPool());
+        uint256 maxFlashLoan = dai.balanceOf(adai);
+        uint256 availableFunds = maxFlashLoan > totalApproval
+            ? totalApproval * POOL.FLASHLOAN_PREMIUM_TOTAL() / 10_000
+            : (totalApproval - maxFlashLoan) + maxFlashLoan * POOL.FLASHLOAN_PREMIUM_TOTAL() / 10_000;
+        console2.log("availableFunds", availableFunds);
+        console2.log("  maxFlashLoan", maxFlashLoan);
+        console2.log(" totalApproval", totalApproval);
+        console2.log("  new Approval", totalApproval + maxFlashLoan * POOL.FLASHLOAN_PREMIUM_TOTAL() / 10_000);
+        deal(address(dai), walletC, availableFunds);
+
+        vm.prank(walletC);
+        // dai.approve(address(utils), availableFunds);
+        // approve the max uint256
+        dai.approve(address(utils), type(uint256).max);
+
+        // -------------------------------------------------------------------------
+
+        CoolerUtils.BatchFashLoan[] memory batches = new CoolerUtils.BatchFashLoan[](3);
+        batches[0] = CoolerUtils.BatchFashLoan(address(coolerA), idsA);
+        batches[1] = CoolerUtils.BatchFashLoan(address(coolerB), idsB);
+        batches[2] = CoolerUtils.BatchFashLoan(address(coolerC), idsC);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        utils.consolidateLoansWithoutFunds(address(coolerC), address(clearinghouse), batches, availableFunds, false);
+
+        // Check that coolerA doesn't have open loans
+        loan = coolerA.getLoan(0);
+        assertEq(loan.collateral, 0);
+        loan = coolerA.getLoan(1);
+        assertEq(loan.collateral, 0);
+        loan = coolerA.getLoan(2);
+        assertEq(loan.collateral, 0);
+        vm.expectRevert();
+        loan = coolerA.getLoan(3);
+        // Check that coolerB doesn't have open loans
+        loan = coolerB.getLoan(0);
+        assertEq(loan.collateral, 0);
+        loan = coolerB.getLoan(1);
+        assertEq(loan.collateral, 0);
+        vm.expectRevert();
+        loan = coolerB.getLoan(2);
+        // Check that coolerC has a single open loan
+        loan = coolerC.getLoan(0);
+        assertEq(loan.collateral, 0);
+        loan = coolerC.getLoan(1);
+        assertEq(loan.collateral, (3_333 + 1_000 + 500) * 1e18);
+
+        // Check token balances
+        assertEq(dai.balanceOf(walletA), 0);
+        assertEq(dai.balanceOf(walletB), 0);
+        assertEq(dai.balanceOf(walletC), initPrincipal);
+        assertEq(gohm.balanceOf(address(coolerA)), 0);
+        assertEq(gohm.balanceOf(address(coolerB)),0);
+        assertEq(gohm.balanceOf(address(coolerC)), (3_333 + 1_000 + 500) * 1e18);
+        // Check allowances
+        assertEq(dai.allowance(address(walletA), address(utils)), 0);
+        assertEq(gohm.allowance(address(walletA), address(utils)), 0);
+        assertEq(dai.allowance(address(walletB), address(utils)), 0);
+        assertEq(gohm.allowance(address(walletB), address(utils)), 0);
+        assertEq(dai.allowance(address(walletC), address(utils)), 0);
+        assertEq(gohm.allowance(address(walletC), address(utils)), 0);
     }
 
     // --- AUX FUNCTIONS -----------------------------------------------------------
