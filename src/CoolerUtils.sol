@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GLP-3.0
 pragma solidity ^0.8.15;
 
+import {Test, console2} from "forge-std/Test.sol";
+
 import { IFlashLoanSimpleReceiver, IPoolAddressesProvider, IPool } from "src/interfaces/aave-v3/IFlashLoanSimpleReceiver.sol";
 import { IClearinghouse } from "src/interfaces/olympus-v3/IClearinghouse.sol";
 import { ICooler } from "src/interfaces/olympus-v3/ICooler.sol";
@@ -197,28 +199,24 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
             uint256 numLoans = batch_[i].ids.length;
             ICooler cooler = ICooler(batch_[i].cooler);
 
-            {
-                // Cache batch debt and principal
-                (uint256 batchDebt, uint256 batchPrincipal) = _getDebtForLoans(address(cooler), numLoans, batch_[i].ids);
-                totalPrincipal += batchPrincipal;
-                totalDebt += batchDebt;
+            // Cache batch debt and principal
+            (uint256 batchDebt, uint256 batchPrincipal) = _getDebtForLoans(address(cooler), numLoans, batch_[i].ids);
+            totalPrincipal += batchPrincipal;
+            totalDebt += batchDebt;
 
-                // Grant approval to the Cooler to spend the debt
-                dai.approve(address(cooler), batchDebt);
-            }
-            
-            address owner = cooler.owner();
+            // Grant approval to the Cooler to spend the debt
+            dai.approve(address(cooler), batchDebt);
         
             // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
-            if (owner != msg.sender && !isApprovedFor[address(cooler)][msg.sender])
+            if (cooler.owner() != msg.sender && !isApprovedFor[address(cooler)][msg.sender])
                 revert MissingApproval(address(cooler));
+        }
 
-            // Transfer in necessary DAI to repay the loans
-            if (sdai_) {
-                sdai.redeem(availableFunds_, address(this), owner);
-            } else {
-                dai.transferFrom(owner, address(this), availableFunds_);
-            }
+        // Transfer in necessary DAI to repay the loans
+        if (sdai_) {
+            sdai.redeem(availableFunds_, address(this), msg.sender);
+        } else {
+            dai.transferFrom(msg.sender, address(this), availableFunds_);
         }
 
         // Calculate the required flashloan amount based on the available funds.
@@ -262,7 +260,7 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
         IClearinghouse(clearinghouse).lendToCooler(cooler, principal);
 
         // Repay flashloan
-        dai.transferFrom(cooler.owner(), address(this), principal);
+        dai.transferFrom(cooler.owner(), address(this), amount_);
         dai.approve(address(POOL), amount_ + premium_);
 
         return true;

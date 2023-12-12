@@ -692,7 +692,11 @@ contract CoolerUtilsTest is Test {
         batches[2] = CoolerUtils.Batch(false, address(coolerC), idsC);
 
         // Attempt to consolidate loans with a wallet that is not approved
-        vm.expectRevert(CoolerUtils.MissingApproval.selector);
+        bytes memory err = abi.encodeWithSelector(
+            CoolerUtils.MissingApproval.selector,
+            address(coolerA)
+        );
+        vm.expectRevert(err);
         utils.consolidateLoansFromMultipleCoolers(address(coolerZ), address(clearinghouse), batches);
     }
 
@@ -703,6 +707,12 @@ contract CoolerUtilsTest is Test {
         uint256[] memory idsB = _idsB();
         uint256[] memory idsC = _idsC();
         uint256 initPrincipal = dai.balanceOf(walletA) + dai.balanceOf(walletB) + dai.balanceOf(walletC);
+
+        // Pretend that owners wallets doen't have enough funds to consolidate so they have to use a flashloan
+        deal(address(dai), walletA, 0);
+        deal(address(dai), walletB, 0);
+        deal(address(dai), walletC, 0);
+        deal(address(dai), walletZ, 0);
 
         // Check that coolerA has 3 open loans
         ICooler.Loan memory loan = coolerA.getLoan(0);
@@ -730,47 +740,54 @@ contract CoolerUtilsTest is Test {
         //                 NECESSARY USER SETUP BEFORE CONSOLIDATING
         // -------------------------------------------------------------------------
 
-        uint256 totalApproval;
+        uint256 totalDebt;
+
         // Ensure that walletA grants gOHM approval
-        (address owner, uint256 gohmApproval, uint256 daiApproval, ) = utils.requiredApprovals(address(coolerA), idsA);
-        totalApproval += daiApproval;
-        assertEq(owner, walletA);
+        {
+            (address owner, uint256 gohmApproval, uint256 daiApproval, ) = utils.requiredApprovals(address(coolerA), idsA);
+            totalDebt += daiApproval;
+            assertEq(owner, walletA);
 
-        vm.prank(walletA);
-        gohm.approve(address(utils), gohmApproval);
+            vm.startPrank(walletA);
+            gohm.approve(address(utils), gohmApproval);
+            utils.approve(address(coolerA), walletZ);
+            vm.stopPrank();
 
-        // Ensure that walletB grants gOHM approval
-        (owner, gohmApproval, daiApproval, ) = utils.requiredApprovals(address(coolerB), idsB);
-        totalApproval += daiApproval;
-        assertEq(owner, walletB);
+            // Ensure that walletB grants gOHM approval
+            (owner, gohmApproval, daiApproval, ) = utils.requiredApprovals(address(coolerB), idsB);
+            totalDebt += daiApproval;
+            assertEq(owner, walletB);
 
-        vm.prank(walletB);
-        gohm.approve(address(utils), gohmApproval);
+            vm.startPrank(walletB);
+            gohm.approve(address(utils), gohmApproval);
+            utils.approve(address(coolerB), walletZ);
+            vm.stopPrank();
 
-        // Ensure that walletC grants gOHM approval
-        (owner, gohmApproval, daiApproval, ) = utils.requiredApprovals(address(coolerC), idsC);
-        totalApproval += daiApproval;
-        assertEq(owner, walletC);
+            // Ensure that walletC grants gOHM approval
+            (owner, gohmApproval, daiApproval, ) = utils.requiredApprovals(address(coolerC), idsC);
+            totalDebt += daiApproval;
+            assertEq(owner, walletC);
 
-        vm.prank(walletC);
-        gohm.approve(address(utils), gohmApproval);
+            vm.startPrank(walletC);
+            gohm.approve(address(utils), gohmApproval);
+            utils.approve(address(coolerC), walletZ);
+            vm.stopPrank();
+        }
 
         // Ensure that owner of the target wallet has enough DAI to consolidate and grant necessary approval
         IPool POOL = IPool(IPoolAddressesProvider(aave).getPool());
-        uint256 maxFlashLoan = dai.balanceOf(adai);
-        uint256 availableFunds = maxFlashLoan > totalApproval
-            ? totalApproval * POOL.FLASHLOAN_PREMIUM_TOTAL() / 10_000
-            : (totalApproval - maxFlashLoan) + maxFlashLoan * POOL.FLASHLOAN_PREMIUM_TOTAL() / 10_000;
-        console2.log("availableFunds", availableFunds);
-        console2.log("  maxFlashLoan", maxFlashLoan);
-        console2.log(" totalApproval", totalApproval);
-        console2.log("  new Approval", totalApproval + maxFlashLoan * POOL.FLASHLOAN_PREMIUM_TOTAL() / 10_000);
-        deal(address(dai), walletC, availableFunds);
+        uint256 flashLoan = dai.balanceOf(adai) > totalDebt ? totalDebt : dai.balanceOf(adai);
+        uint256 flashloanFee = flashLoan * POOL.FLASHLOAN_PREMIUM_TOTAL() / 10_000;
+        uint256 availableFunds = totalDebt - flashLoan + flashloanFee;
+        uint256 requiredApproval = flashLoan;
+    
+        deal(address(dai), walletZ, availableFunds);
 
         vm.prank(walletC);
-        // dai.approve(address(utils), availableFunds);
-        // approve the max uint256
-        dai.approve(address(utils), type(uint256).max);
+        dai.approve(address(utils), requiredApproval);
+
+        vm.prank(walletZ);
+        dai.approve(address(utils), availableFunds);
 
         // -------------------------------------------------------------------------
 
@@ -780,6 +797,7 @@ contract CoolerUtilsTest is Test {
         batches[2] = CoolerUtils.BatchFashLoan(address(coolerC), idsC);
 
         // Consolidate loans for coolers A, B, and C into coolerC
+        vm.prank(walletZ);
         utils.consolidateLoansWithoutFunds(address(coolerC), address(clearinghouse), batches, availableFunds, false);
 
         // Check that coolerA doesn't have open loans
@@ -805,12 +823,15 @@ contract CoolerUtilsTest is Test {
         assertEq(loan.collateral, (3_333 + 1_000 + 500) * 1e18);
 
         // Check token balances
+        assertEq(dai.balanceOf(address(utils)), 0);
         assertEq(dai.balanceOf(walletA), 0);
         assertEq(dai.balanceOf(walletB), 0);
-        assertEq(dai.balanceOf(walletC), initPrincipal);
+        assertEq(dai.balanceOf(walletC), initPrincipal - flashLoan);
+        assertEq(dai.balanceOf(walletZ), 0);
         assertEq(gohm.balanceOf(address(coolerA)), 0);
         assertEq(gohm.balanceOf(address(coolerB)),0);
         assertEq(gohm.balanceOf(address(coolerC)), (3_333 + 1_000 + 500) * 1e18);
+        assertEq(gohm.balanceOf(address(utils)), 0);
         // Check allowances
         assertEq(dai.allowance(address(walletA), address(utils)), 0);
         assertEq(gohm.allowance(address(walletA), address(utils)), 0);
@@ -818,6 +839,7 @@ contract CoolerUtilsTest is Test {
         assertEq(gohm.allowance(address(walletB), address(utils)), 0);
         assertEq(dai.allowance(address(walletC), address(utils)), 0);
         assertEq(gohm.allowance(address(walletC), address(utils)), 0);
+        assertEq(dai.allowance(address(walletZ), address(utils)), 0);
     }
 
     // --- AUX FUNCTIONS -----------------------------------------------------------
