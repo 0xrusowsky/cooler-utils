@@ -49,9 +49,9 @@ contract CoolerUtilsTest is Test {
 
         // Deploy CoolerUtils
         utils = new CoolerUtils(
-            address(dai),
-            address(sdai),
             address(gohm),
+            address(sdai),
+            address(dai),
             aave
         );
 
