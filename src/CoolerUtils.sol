@@ -46,9 +46,9 @@ contract CoolerUtils is IFlashLoanSimpleReceiver {
     // --- INITIALIZATION ----------------------------------------------------------
 
     constructor(
-        address dai_,
-        address sdai_,
         address gohm_,
+        address sdai_,
+        address dai_,
         address addressProviderAAVE_
     ) {
         // Initialize FlashLoan Simple Receiver constants
