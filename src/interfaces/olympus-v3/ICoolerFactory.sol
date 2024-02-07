@@ -6,4 +6,6 @@ import {IERC20} from "forge-std/interfaces/IERC20.sol";
 interface ICoolerFactory {
 
     function generateCooler(IERC20 collateral_, IERC20 debt_) external returns (address cooler);
+
+    function getCoolerFor(address user_, address collateral_, address debt_) external returns (address cooler);
 }
