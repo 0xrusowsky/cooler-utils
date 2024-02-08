@@ -89,7 +89,7 @@ contract CoolerUtilsTest is Test {
 
     // --- consolidateLoansWithoutFunds --------------------------------------------
 
-    function test_consolidateLoansWithoutFunds_DAI_funding() public {
+    function test_userCheck() public {
         uint256[] memory idsA = _idsA();
         uint256[] memory idsB = _idsB();
         uint256[] memory idsC = _idsC();
