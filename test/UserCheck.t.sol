@@ -322,7 +322,7 @@ contract CoolerUtilsTest is Test {
         //                   CHECKS AFTER CONSOLIDATING LOANS
         // -------------------------------------------------------------------------
 
-        IClearinghouse.Loan memory loan;
+        ICooler.Loan memory loan;
         // Check that old loans are closed for coolerA
         for (uint256 i = 0; i < idsA.length; i++) {
             loan = coolerA.getLoan(idsA[i]);
